@@ -27,7 +27,10 @@ class LogTab;
 class Favorite;
 class MonitoringCenter;
 class MonitorsTab;
+class QFrame;
 class QSettings;
+class QToolButton;
+class QVBoxLayout;
 class SettingsDock;
 class Site;
 class TabSelector;
@@ -111,6 +114,15 @@ class MainWindow : public QMainWindow
 		void initialLoginsDone();
 
 	private:
+		void setupDefaultDockLayout();
+		void setupModernShell();
+		void setModernSidebarVisible(bool visible);
+
+		QFrame *m_modernSidebar = nullptr;
+		QToolButton *m_sidebarToggleButton = nullptr;
+		QVBoxLayout *m_modernTagsLayout = nullptr;
+		QVBoxLayout *m_modernFavoritesLayout = nullptr;
+		QVBoxLayout *m_modernSettingsLayout = nullptr;
 		Profile *m_profile;
 		QList<Favorite> &m_favorites;
 		int m_waitForLogin;

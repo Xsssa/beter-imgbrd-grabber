@@ -124,6 +124,19 @@ void QBouton::paintEvent(QPaintEvent *event)
 		painter.setPen(QPen(Qt::white));
 		painter.drawText(notificationRect, Qt::AlignCenter, m_counter);
 	}
+
+	// Modern hover/selection treatment for gallery thumbnails.
+	if (underMouse() || isChecked()) {
+		painter.setClipping(false);
+		painter.setRenderHint(QPainter::Antialiasing);
+
+		const QRect outlineRect = QRect(x, y, w, h).adjusted(1, 1, -2, -2);
+		const QColor accent(69, 224, 208);
+		QPen outlinePen(accent, isChecked() ? 3 : 2);
+		painter.setPen(outlinePen);
+		painter.setBrush(Qt::NoBrush);
+		painter.drawRoundedRect(outlineRect, 8, 8);
+	}
 }
 
 QSize QBouton::getIconSize(int regionWidth, int regionHeight, bool wOnly) const

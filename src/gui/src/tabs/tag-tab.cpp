@@ -24,6 +24,53 @@ TagTab::TagTab(Profile *profile, DownloadQueue *downloadQueue, MainWindow *paren
 	: SearchTab(profile, downloadQueue, parent, "Tag"), ui(new Ui::TagTab)
 {
 	ui->setupUi(this);
+	setObjectName(QStringLiteral("modernSearchTab"));
+	ui->widget->setObjectName(QStringLiteral("historyCluster"));
+	ui->widgetPlus->setObjectName(QStringLiteral("advancedSearchPanel"));
+	ui->scrollAreaResults->setObjectName(QStringLiteral("resultsViewport"));
+	ui->scrollAreaWidget->setObjectName(QStringLiteral("resultsCanvas"));
+	ui->buttonSourcesList->setObjectName(QStringLiteral("sourcesButton"));
+	ui->buttonTags->setObjectName(QStringLiteral("primarySearchButton"));
+	ui->buttonGetAll->setObjectName(QStringLiteral("primaryDownloadButton"));
+	ui->comboEndpoint->setObjectName(QStringLiteral("endpointSelector"));
+	ui->spinPage->setObjectName(QStringLiteral("pageStepper"));
+	ui->buttonSearch->setObjectName(QStringLiteral("filterButton"));
+	ui->pushButton->setObjectName(QStringLiteral("overflowButton"));
+	ui->buttonMonitor->setObjectName(QStringLiteral("secondaryDownloadButton"));
+	ui->buttonGetSel->setObjectName(QStringLiteral("secondaryDownloadButton"));
+	ui->buttonGetpage->setObjectName(QStringLiteral("secondaryDownloadButton"));
+	ui->buttonFirstPage->setObjectName(QStringLiteral("pageNavButton"));
+	ui->buttonPreviousPage->setObjectName(QStringLiteral("pageNavButton"));
+	ui->buttonNextPage->setObjectName(QStringLiteral("pageNavButton"));
+	ui->buttonLastPage->setObjectName(QStringLiteral("pageNavButton"));
+	ui->buttonHistoryBack->setToolTip(tr("Previous search"));
+	ui->buttonHistoryNext->setToolTip(tr("Next search"));
+	ui->buttonHistoryBack->setFixedSize(30, 38);
+	ui->buttonHistoryNext->setFixedSize(30, 38);
+	ui->buttonSearch->setText(tr("Filters"));
+	ui->buttonSearch->setFixedHeight(38);
+	ui->buttonSearch->setMinimumWidth(82);
+	ui->buttonTags->setFixedHeight(38);
+	ui->pushButton->setText(tr("More"));
+	ui->pushButton->setFixedHeight(38);
+	ui->pushButton->setMinimumWidth(58);
+	ui->pushButton->setMaximumWidth(72);
+	ui->spinPage->setPrefix(tr("Page "));
+	ui->spinPage->setFixedHeight(38);
+	ui->comboEndpoint->setFixedHeight(38);
+	ui->layoutFields->setContentsMargins(0, 0, 0, 0);
+	ui->layoutFields->setSpacing(8);
+	ui->layoutPlus->setContentsMargins(14, 12, 14, 12);
+	ui->layoutPlus->setHorizontalSpacing(10);
+	ui->layoutPlus->setVerticalSpacing(8);
+	ui->horizontalLayout->setContentsMargins(0, 0, 0, 0);
+	ui->horizontalLayout->setSpacing(8);
+	ui->layoutResults->setHorizontalSpacing(12);
+	ui->layoutResults->setVerticalSpacing(12);
+	ui->buttonMonitor->setMinimumHeight(36);
+	ui->buttonGetSel->setMinimumHeight(36);
+	ui->buttonGetpage->setMinimumHeight(36);
+	ui->buttonGetAll->setMinimumHeight(36);
 	ui->widgetMeant->hide();
 
 	// UI members for SearchTab class
@@ -52,6 +99,12 @@ TagTab::TagTab(Profile *profile, DownloadQueue *downloadQueue, MainWindow *paren
 	// Search fields
 	m_search = createAutocomplete();
 	m_postFiltering = createAutocomplete();
+	m_search->setObjectName(QStringLiteral("mainSearchField"));
+	m_search->setPlaceholderText(tr("Search tags, artists, ratings..."));
+	m_search->setFixedHeight(38);
+	m_postFiltering->setObjectName(QStringLiteral("postFilterField"));
+	m_postFiltering->setPlaceholderText(tr("Post-filter results"));
+	m_postFiltering->setFixedHeight(34);
 	ui->layoutFields->insertWidget(2, m_search, 1);
 	ui->layoutPlus->addWidget(m_postFiltering, 1, 1, 1, 3);
 	connect(ui->labelMeant, SIGNAL(linkActivated(QString)), this, SLOT(setTags(QString)));

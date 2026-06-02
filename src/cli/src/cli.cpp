@@ -98,6 +98,24 @@ int parseAndRunCliArgs(QCoreApplication *app, Profile *profile, bool defaultToGu
 
 	// Go through the new CLI for the various commands supported by it
 	const QStringList args = app->arguments();
+	bool hasArguments = false;
+	for (int i = 1; i < args.count(); ++i) {
+		if (!args.at(i).trimmed().isEmpty()) {
+			hasArguments = true;
+			break;
+		}
+	}
+	if (defaultToGui && !hasArguments) {
+		Logger::setupMessageOutput(true);
+		Logger::getInstance().setLogLevel(Logger::Info);
+		#ifdef QT_DEBUG
+			Logger::getInstance().setConsoleOutputLevel(Logger::Debug);
+		#else
+			Logger::getInstance().setConsoleOutputLevel(Logger::Error);
+		#endif
+		return -1;
+	}
+
 	bool guessUseCLI = (defaultToGui && (args.contains("-c") || args.contains("--cli"))) || (!defaultToGui && !args.contains("-g") && !args.contains("--gui"));
 	if (guessUseCLI && (args.contains("source") || args.contains("source-registry"))) {
 		return parseAndRunCliArgsV2(app, profile, defaultToGui, params, positionalArgs);

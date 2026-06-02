@@ -6,10 +6,12 @@ find_package(Qt6 COMPONENTS Core Gui Network REQUIRED)
 set(QT_LIBRARIES Qt6::Core Qt6::Gui Qt6::Network)
 
 file(GLOB_RECURSE SOURCES "src/*.cpp" "vendor/*.cpp")
+set(LIB_SOURCES ${SOURCES})
+list(REMOVE_ITEM LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 include_directories("src/" "../lib/src/" ".." ".")
 
 # CLI library (to be included in the CLI executable)
-add_library(${PROJECT_NAME}-lib STATIC ${SOURCES})
+add_library(${PROJECT_NAME}-lib STATIC ${LIB_SOURCES})
 target_link_libraries(${PROJECT_NAME}-lib ${QT_LIBRARIES} ${LIBS})
 
 # CLI executable

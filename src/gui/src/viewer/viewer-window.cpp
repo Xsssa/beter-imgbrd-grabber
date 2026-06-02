@@ -52,6 +52,19 @@ ViewerWindow::ViewerWindow(QList<QSharedPointer<Image>> images, const QSharedPoi
 	connect(parent, &MainWindow::destroyed, this, &QWidget::deleteLater);
 
 	ui->setupUi(this);
+	setObjectName(QStringLiteral("modernViewerWindow"));
+	ui->widgetLeft->setObjectName(QStringLiteral("viewerTagRail"));
+	ui->scrollArea->setObjectName(QStringLiteral("viewerTagScroll"));
+	ui->scrollAreaWidgetContents->setObjectName(QStringLiteral("viewerTagContents"));
+	ui->labelPools->setObjectName(QStringLiteral("viewerPoolBar"));
+	ui->progressBarDownload->setObjectName(QStringLiteral("viewerDownloadProgress"));
+	ui->buttonPlus->setObjectName(QStringLiteral("viewerDrawerButton"));
+	ui->windowLayout->setContentsMargins(10, 10, 10, 10);
+	ui->windowLayout->setSpacing(8);
+	ui->horizontalLayout->setSpacing(10);
+	ui->buttonsLayout->setContentsMargins(0, 8, 0, 0);
+	ui->buttonsLayout->setHorizontalSpacing(8);
+	ui->buttonsLayout->setVerticalSpacing(8);
 
 	m_pendingAction = PendingNothing;
 	m_pendingClose = false;
@@ -102,6 +115,7 @@ ViewerWindow::ViewerWindow(QList<QSharedPointer<Image>> images, const QSharedPoi
 	configureButtons();
 
 	m_labelTagsLeft = new QAffiche(QVariant(), 0, QColor(), this);
+		m_labelTagsLeft->setObjectName(QStringLiteral("viewerTagsLeft"));
 		m_labelTagsLeft->setContextMenuPolicy(Qt::CustomContextMenu);
 		m_labelTagsLeft->setTextInteractionFlags(Qt::TextBrowserInteraction);
 		connect(m_labelTagsLeft, &QAffiche::customContextMenuRequested, this, &ViewerWindow::contextMenu);
@@ -111,6 +125,7 @@ ViewerWindow::ViewerWindow(QList<QSharedPointer<Image>> images, const QSharedPoi
 		ui->scrollAreaWidgetContents->layout()->addWidget(m_labelTagsLeft);
 
 	m_labelTagsTop = new QAffiche(QVariant(), 0, QColor(), this);
+		m_labelTagsTop->setObjectName(QStringLiteral("viewerTagsTop"));
 		m_labelTagsTop->setWordWrap(true);
 		m_labelTagsTop->setContextMenuPolicy(Qt::CustomContextMenu);
 		m_labelTagsTop->setTextInteractionFlags(Qt::TextBrowserInteraction);
@@ -127,8 +142,10 @@ ViewerWindow::ViewerWindow(QList<QSharedPointer<Image>> images, const QSharedPoi
 	connect(m_profile, &Profile::blacklistChanged, this, &ViewerWindow::colore);
 
 	m_stackedWidget = new QStackedWidget(this);
+		m_stackedWidget->setObjectName(QStringLiteral("viewerMediaStage"));
 		ui->verticalLayout->insertWidget(1, m_stackedWidget, 1);
 	m_labelImage = new QAffiche(QVariant(), 0, QColor(), this);
+		m_labelImage->setObjectName(QStringLiteral("viewerImageCanvas"));
 		m_labelImage->setSizePolicy(QSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored));
 		m_labelImage->setAlignment(getAlignments("imagePositionImage"));
 		connect(m_labelImage, SIGNAL(doubleClicked()), this, SLOT(openFile()));
@@ -559,15 +576,26 @@ void ViewerWindow::contextMenu(const QPoint &pos)
 
 	Page page(m_profile, m_site, { m_site }, QStringList { m_link });
 	auto *menu = new TagContextMenu(m_link, m_image->tags(), page.friendlyUrl(), m_profile, { m_site }, true, this);
-	connect(menu, &TagContextMenu::openNewTab, this, &ViewerWindow::openInNewTab);
+	const QString link = m_link;
+	connect(menu, &TagContextMenu::openNewTab, this, [this, link]() {
+		if (!link.isEmpty() && m_parent != nullptr) {
+			m_parent->addTab(link, false, true, m_tab);
+			m_parent->showNormal();
+			m_parent->raise();
+			m_parent->activateWindow();
+		}
+	});
 	connect(menu, &TagContextMenu::setFavoriteImage, this, &ViewerWindow::setfavorite);
 	menu->exec(QCursor::pos());
 }
 
 void ViewerWindow::openInNewTab()
 {
-	if (!m_link.isEmpty()) {
+	if (!m_link.isEmpty() && m_parent != nullptr) {
 		m_parent->addTab(m_link, false, true, m_tab);
+		m_parent->showNormal();
+		m_parent->raise();
+		m_parent->activateWindow();
 	}
 }
 void ViewerWindow::setfavorite()

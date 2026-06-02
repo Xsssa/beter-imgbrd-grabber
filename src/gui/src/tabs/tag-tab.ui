@@ -21,10 +21,25 @@
     <normaloff>:/images/icon.ico</normaloff>:/images/icon.ico</iconset>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,0,0,1,0">
+   <property name="spacing">
+    <number>8</number>
+   </property>
+   <property name="leftMargin">
+    <number>8</number>
+   </property>
+   <property name="topMargin">
+    <number>8</number>
+   </property>
+   <property name="rightMargin">
+    <number>8</number>
+   </property>
+   <property name="bottomMargin">
+    <number>8</number>
+   </property>
    <item>
-    <layout class="QHBoxLayout" name="layoutFields" stretch="0,0,0,0,0,0">
+    <layout class="QHBoxLayout" name="layoutFields" stretch="0,1,0,0,0,0">
      <property name="spacing">
-      <number>6</number>
+      <number>8</number>
      </property>
      <item>
       <widget class="QWidget" name="widget" native="true">
@@ -103,7 +118,7 @@
      <item>
       <widget class="QPushButton" name="buttonSearch">
        <property name="text">
-        <string>Pl&amp;us</string>
+        <string>&amp;Filters</string>
        </property>
       </widget>
      </item>
@@ -126,7 +141,7 @@
      <item>
       <widget class="QPushButton" name="buttonTags">
        <property name="text">
-        <string>O&amp;k</string>
+        <string>&amp;Search</string>
        </property>
       </widget>
      </item>
@@ -139,7 +154,7 @@
         </size>
        </property>
        <property name="text">
-        <string notr="true">+</string>
+        <string>&amp;More</string>
        </property>
        <property name="checkable">
         <bool>true</bool>
@@ -189,7 +204,7 @@
       <bool>true</bool>
      </property>
      <property name="styleSheet">
-      <string notr="true">#widgetPlus { border: 1px solid #bbb; border-radius: 5px; }</string>
+      <string notr="true"/>
      </property>
      <layout class="QGridLayout" name="layoutPlus">
       <item row="1" column="0">
@@ -377,6 +392,9 @@
    </item>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,1,1,1,1,1,1,1,0,0">
+     <property name="spacing">
+      <number>8</number>
+     </property>
      <item>
       <widget class="QPushButton" name="buttonFirstPage">
        <property name="enabled">
@@ -472,28 +490,28 @@
      <item>
       <widget class="QPushButton" name="buttonMonitor">
        <property name="text">
-        <string>&amp;Monitor</string>
+        <string>&amp;Watch</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="buttonGetSel">
        <property name="text">
-        <string>Get &amp;selected</string>
+        <string>&amp;Selected</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="buttonGetpage">
        <property name="text">
-        <string>Get this &amp;page</string>
+        <string>&amp;Page</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="buttonGetAll">
        <property name="text">
-        <string>Get &amp;all</string>
+        <string>&amp;All</string>
        </property>
       </widget>
      </item>

@@ -3,14 +3,24 @@
 #include <QCompleter>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDockWidget>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
+#include <QFrame>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QNetworkProxy>
 #include <QShortcut>
+#include <QSizePolicy>
 #include <QStringList>
+#include <QTabBar>
+#include <QToolBar>
+#include <QToolButton>
+#include <QVBoxLayout>
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 4, 0))
 	#include <QSysInfo>
 #endif
@@ -68,6 +78,67 @@
 #include "utils/tag-loader/tag-loader.h"
 
 
+namespace
+{
+	constexpr int UiLayoutVersion = 5;
+
+	QWidget *modernDockTitle(const QString &title, QDockWidget *dock)
+	{
+		auto *bar = new QWidget(dock);
+		bar->setObjectName(QStringLiteral("modernDockTitle"));
+		bar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+		auto *layout = new QHBoxLayout(bar);
+		layout->setContentsMargins(12, 8, 10, 8);
+		layout->setSpacing(8);
+
+		auto *label = new QLabel(title, bar);
+		label->setObjectName(QStringLiteral("modernDockTitleLabel"));
+		layout->addWidget(label);
+		layout->addStretch();
+
+		return bar;
+	}
+
+	QVBoxLayout *modernSidebarSection(QVBoxLayout *sidebarLayout, const QString &title, const QString &objectName, int stretch)
+	{
+		auto *section = new QFrame(sidebarLayout->parentWidget());
+		section->setObjectName(objectName);
+		section->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+		auto *layout = new QVBoxLayout(section);
+		layout->setContentsMargins(8, 8, 8, 8);
+		layout->setSpacing(6);
+
+		auto *label = new QLabel(title, section);
+		label->setObjectName(QStringLiteral("modernSidebarTitle"));
+		layout->addWidget(label);
+
+		auto *content = new QWidget(section);
+		content->setObjectName(objectName + QStringLiteral("Content"));
+		content->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+		auto *contentLayout = new QVBoxLayout(content);
+		contentLayout->setContentsMargins(0, 0, 0, 0);
+		contentLayout->setSpacing(6);
+		layout->addWidget(content, 1);
+
+		sidebarLayout->addWidget(section, stretch);
+		return contentLayout;
+	}
+
+	QToolButton *modernHeaderButton(QAction *action, QWidget *parent)
+	{
+		auto *button = new QToolButton(parent);
+		button->setDefaultAction(action);
+		button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+		button->setObjectName(QStringLiteral("modernHeaderButton"));
+		button->setAutoRaise(true);
+		button->setFixedSize(38, 38);
+		return button;
+	}
+}
+
 MainWindow::MainWindow(Profile *profile)
 	: ui(new Ui::MainWindow), m_profile(profile), m_favorites(m_profile->getFavorites()), m_loaded(false), m_languageLoader(savePath("languages/", true, false)), m_currentTab(nullptr)
 {}
@@ -82,6 +153,7 @@ void MainWindow::init(const QStringList &args, const QMap<QString, QString> &par
 	m_themeLoader->setTheme(m_settings->value("theme", "Default").toString());
 	qApp->setStyle(baseStyle(m_settings));
 	ui->setupUi(this);
+	setupModernShell();
 
 	if (m_settings->value("Log/show", true).toBool()) {
 		m_logTab = new LogTab(this);
@@ -118,10 +190,7 @@ void MainWindow::init(const QStringList &args, const QMap<QString, QString> &par
 	m_languageLoader.install(qApp);
 	m_languageLoader.setLanguage(m_settings->value("language", "English").toString(), m_settings->value("useSystemLocale", true).toBool());
 
-	tabifyDockWidget(ui->dock_internet, ui->dock_wiki);
-	tabifyDockWidget(ui->dock_wiki, ui->dock_kfl);
-	tabifyDockWidget(ui->dock_kfl, ui->dock_favorites);
-	ui->dock_internet->raise();
+	setupDefaultDockLayout();
 
 	ui->menuView->addAction(ui->dock_internet->toggleViewAction());
 	ui->menuView->addAction(ui->dock_wiki->toggleViewAction());
@@ -209,14 +278,22 @@ void MainWindow::init(const QStringList &args, const QMap<QString, QString> &par
 	// "Settings" dock
 	m_settingsDock = new SettingsDock(m_profile, this);
 	connect(this, &MainWindow::tabChanged, m_settingsDock, &SettingsDock::tabChanged);
-	ui->dockSettingsLayout->addWidget(m_settingsDock);
+	if (m_modernSettingsLayout != nullptr) {
+		m_modernSettingsLayout->addWidget(m_settingsDock);
+	} else {
+		ui->dockSettingsLayout->addWidget(m_settingsDock);
+	}
 
 	// "Favorites" dock
 	auto *favoritesDock = new FavoritesDock(m_profile, this);
 	connect(favoritesDock, &FavoritesDock::open, this, &MainWindow::loadTagNoTab);
 	connect(favoritesDock, &FavoritesDock::openInNewTab, this, &MainWindow::loadTagTab);
 	connect(this, &MainWindow::tabChanged, favoritesDock, &FavoritesDock::tabChanged);
-	ui->dockFavoritesLayout->addWidget(favoritesDock);
+	if (m_modernFavoritesLayout != nullptr) {
+		m_modernFavoritesLayout->addWidget(favoritesDock);
+	} else {
+		ui->dockFavoritesLayout->addWidget(favoritesDock);
+	}
 
 	// "Keep for later" dock
 	auto *kflDock = new KeepForLaterDock(m_profile, this);
@@ -236,7 +313,11 @@ void MainWindow::init(const QStringList &args, const QMap<QString, QString> &par
 	connect(tagsDock, &TagsDock::open, this, &MainWindow::loadTagNoTab);
 	connect(tagsDock, &TagsDock::openInNewTab, this, &MainWindow::loadTagTab);
 	connect(this, &MainWindow::tabChanged, tagsDock, &TagsDock::tabChanged);
-	ui->dockTagsLayout->addWidget(tagsDock);
+	if (m_modernTagsLayout != nullptr) {
+		m_modernTagsLayout->addWidget(tagsDock);
+	} else {
+		ui->dockTagsLayout->addWidget(tagsDock);
+	}
 
 	// Action on first load
 	if (m_settings->value("firstload", true).toBool()) {
@@ -260,7 +341,14 @@ void MainWindow::init(const QStringList &args, const QMap<QString, QString> &par
 
 	// Loading last window state, size and position from the settings file
 	restoreGeometry(m_settings->value("geometry").toByteArray());
-	restoreState(m_settings->value("state").toByteArray());
+	if (m_modernTagsLayout == nullptr && m_settings->value("uiLayoutVersion", 0).toInt() >= UiLayoutVersion) {
+		restoreState(m_settings->value("state").toByteArray());
+	} else if (m_modernTagsLayout == nullptr) {
+		setupDefaultDockLayout();
+		m_settings->setValue("uiLayoutVersion", UiLayoutVersion);
+	} else {
+		m_settings->setValue("uiLayoutVersion", UiLayoutVersion);
+	}
 
 	// Download queue
 	const int maxConcurrency = qMax(1, qMin(m_settings->value("Save/simultaneous").toInt(), 10));
@@ -446,6 +534,191 @@ MainWindow::~MainWindow()
 {
 	delete ui;
 	ui = nullptr;
+}
+
+void MainWindow::setupDefaultDockLayout()
+{
+	if (m_modernTagsLayout != nullptr) {
+		const QList<QDockWidget*> docks {
+			ui->dock_internet,
+			ui->dock_favorites,
+			ui->dock_kfl,
+			ui->dock_wiki,
+			ui->dockOptions,
+		};
+		for (QDockWidget *dock : docks) {
+			dock->hide();
+		}
+		return;
+	}
+
+	setDockNestingEnabled(true);
+	setDockOptions(QMainWindow::AllowNestedDocks | QMainWindow::AllowTabbedDocks | QMainWindow::AnimatedDocks | QMainWindow::GroupedDragging);
+
+	addDockWidget(Qt::LeftDockWidgetArea, ui->dock_internet);
+	addDockWidget(Qt::RightDockWidgetArea, ui->dock_favorites);
+	addDockWidget(Qt::LeftDockWidgetArea, ui->dockOptions);
+	addDockWidget(Qt::RightDockWidgetArea, ui->dock_kfl);
+	addDockWidget(Qt::RightDockWidgetArea, ui->dock_wiki);
+
+	splitDockWidget(ui->dock_internet, ui->dock_favorites, Qt::Vertical);
+	splitDockWidget(ui->dock_favorites, ui->dockOptions, Qt::Vertical);
+
+	tabifyDockWidget(ui->dock_favorites, ui->dock_kfl);
+	tabifyDockWidget(ui->dockOptions, ui->dock_wiki);
+
+	ui->dock_internet->setMinimumWidth(240);
+	ui->dockOptions->setMinimumWidth(240);
+	ui->dock_kfl->setMinimumWidth(260);
+	ui->dock_favorites->setMinimumWidth(260);
+	ui->dock_wiki->setMinimumWidth(260);
+	ui->dock_internet->setMaximumWidth(380);
+	ui->dockOptions->setMaximumWidth(380);
+	ui->dock_kfl->setMaximumWidth(380);
+	ui->dock_favorites->setMaximumWidth(380);
+	ui->dock_wiki->setMaximumWidth(380);
+
+	ui->dock_internet->raise();
+	ui->dock_favorites->raise();
+	ui->dockOptions->raise();
+	ui->dock_kfl->hide();
+	ui->dock_wiki->hide();
+}
+
+void MainWindow::setupModernShell()
+{
+	ui->centralwidget->setObjectName(QStringLiteral("modernCentral"));
+	ui->menubar->hide();
+	ui->tabWidget->setObjectName(QStringLiteral("mainTabs"));
+	ui->tabWidget->setDocumentMode(true);
+	ui->tabWidget->setUsesScrollButtons(true);
+	ui->tabWidget->tabBar()->setExpanding(false);
+	ui->tabWidget->tabBar()->setElideMode(Qt::ElideRight);
+	ui->tabWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+	auto *centralLayout = qobject_cast<QHBoxLayout*>(ui->centralwidget->layout());
+	if (centralLayout != nullptr) {
+		centralLayout->setContentsMargins(10, 10, 10, 10);
+		centralLayout->setSpacing(12);
+
+		m_modernSidebar = new QFrame(ui->centralwidget);
+		m_modernSidebar->setObjectName(QStringLiteral("modernSidebar"));
+		m_modernSidebar->setMinimumWidth(292);
+		m_modernSidebar->setMaximumWidth(344);
+		m_modernSidebar->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+
+		auto *sidebarLayout = new QVBoxLayout(m_modernSidebar);
+		sidebarLayout->setContentsMargins(10, 10, 10, 10);
+		sidebarLayout->setSpacing(4);
+
+		m_modernTagsLayout = modernSidebarSection(sidebarLayout, tr("Tags"), QStringLiteral("modernSidebarTags"), 3);
+		m_modernFavoritesLayout = modernSidebarSection(sidebarLayout, tr("Favorites"), QStringLiteral("modernSidebarFavorites"), 3);
+		m_modernSettingsLayout = modernSidebarSection(sidebarLayout, tr("Destination"), QStringLiteral("modernSidebarDestination"), 2);
+
+		auto *mainContent = new QFrame(ui->centralwidget);
+		mainContent->setObjectName(QStringLiteral("modernMainContent"));
+		mainContent->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+		auto *mainContentLayout = new QVBoxLayout(mainContent);
+		mainContentLayout->setContentsMargins(0, 0, 0, 0);
+		mainContentLayout->setSpacing(8);
+
+		auto *workspaceHeader = new QFrame(mainContent);
+		workspaceHeader->setObjectName(QStringLiteral("workspaceHeader"));
+		workspaceHeader->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+		auto *headerLayout = new QHBoxLayout(workspaceHeader);
+		headerLayout->setContentsMargins(12, 8, 12, 8);
+		headerLayout->setSpacing(8);
+
+		m_sidebarToggleButton = new QToolButton(workspaceHeader);
+		m_sidebarToggleButton->setObjectName(QStringLiteral("sidebarToggleButton"));
+		m_sidebarToggleButton->setText(QStringLiteral("<"));
+		m_sidebarToggleButton->setToolTip(tr("Hide sidebar"));
+		m_sidebarToggleButton->setFixedSize(38, 38);
+		m_sidebarToggleButton->setAutoRaise(true);
+		m_sidebarToggleButton->setCheckable(true);
+		m_sidebarToggleButton->setChecked(true);
+		connect(m_sidebarToggleButton, &QToolButton::toggled, this, &MainWindow::setModernSidebarVisible);
+		headerLayout->addWidget(m_sidebarToggleButton);
+
+		auto *brand = new QLabel(tr("Grabber"), workspaceHeader);
+		brand->setObjectName(QStringLiteral("appBrandLabel"));
+		brand->setMinimumWidth(112);
+		headerLayout->addWidget(brand);
+		headerLayout->addWidget(modernHeaderButton(ui->actionAddtab, workspaceHeader));
+		headerLayout->addWidget(modernHeaderButton(ui->actionClosetab, workspaceHeader));
+		headerLayout->addSpacing(6);
+		headerLayout->addWidget(modernHeaderButton(ui->actionFolder, workspaceHeader));
+		headerLayout->addWidget(modernHeaderButton(ui->actionSettingsFolder, workspaceHeader));
+		headerLayout->addStretch();
+		headerLayout->addWidget(modernHeaderButton(ui->actionOptions, workspaceHeader));
+
+		auto *overflowMenu = new QMenu(this);
+		overflowMenu->addMenu(ui->menuFichier);
+		overflowMenu->addMenu(ui->menuEdit);
+		overflowMenu->addMenu(ui->menuOutils);
+		overflowMenu->addMenu(ui->menuView);
+		overflowMenu->addMenu(ui->menu_propos);
+
+		auto *overflowButton = new QToolButton(workspaceHeader);
+		overflowButton->setObjectName(QStringLiteral("mainOverflowButton"));
+		overflowButton->setText(QStringLiteral("..."));
+		overflowButton->setToolTip(tr("More"));
+		overflowButton->setFixedSize(48, 38);
+		overflowButton->setPopupMode(QToolButton::InstantPopup);
+		overflowButton->setMenu(overflowMenu);
+		headerLayout->addWidget(overflowButton);
+
+		mainContentLayout->addWidget(workspaceHeader);
+		centralLayout->removeWidget(ui->tabWidget);
+		ui->tabWidget->setParent(mainContent);
+		mainContentLayout->addWidget(ui->tabWidget, 1);
+
+		centralLayout->addWidget(m_modernSidebar);
+		centralLayout->addWidget(mainContent, 1);
+	}
+
+	const QList<QDockWidget*> docks {
+		ui->dock_internet,
+		ui->dock_favorites,
+		ui->dock_kfl,
+		ui->dock_wiki,
+		ui->dockOptions,
+	};
+	for (QDockWidget *dock : docks) {
+		dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+		dock->setTitleBarWidget(modernDockTitle(dock->windowTitle(), dock));
+		dock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+		dock->setObjectName(QStringLiteral("modernDock_%1").arg(dock->objectName()));
+		dock->hide();
+	}
+
+	ui->dockTagsLayout->setContentsMargins(10, 10, 10, 10);
+	ui->dockTagsLayout->setSpacing(8);
+	ui->dockFavoritesLayout->setContentsMargins(10, 10, 10, 10);
+	ui->dockFavoritesLayout->setSpacing(8);
+	ui->dockKflLayout->setContentsMargins(10, 10, 10, 10);
+	ui->dockKflLayout->setSpacing(8);
+	ui->dockWikiLayout->setContentsMargins(10, 10, 10, 10);
+	ui->dockWikiLayout->setSpacing(8);
+	ui->dockSettingsLayout->setContentsMargins(10, 10, 10, 10);
+	ui->dockSettingsLayout->setSpacing(8);
+	setModernSidebarVisible(true);
+}
+
+void MainWindow::setModernSidebarVisible(bool visible)
+{
+	if (m_modernSidebar == nullptr) {
+		return;
+	}
+
+	m_modernSidebar->setVisible(visible);
+	if (m_sidebarToggleButton != nullptr) {
+		m_sidebarToggleButton->setText(visible ? QStringLiteral("<") : QStringLiteral(">"));
+		m_sidebarToggleButton->setToolTip(visible ? tr("Hide sidebar") : tr("Show sidebar"));
+		m_sidebarToggleButton->setChecked(visible);
+	}
 }
 
 void MainWindow::focusSearch()
@@ -795,6 +1068,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	log(QStringLiteral("Saving..."), Logger::Debug);
 		m_downloadsTab->saveLinkList(m_profile->getPath() + "/restore.igl");
 		saveTabs(m_profile->getPath() + "/tabs.json");
+		m_settings->setValue("uiLayoutVersion", UiLayoutVersion);
 		m_settings->setValue("state", saveState());
 		m_settings->setValue("geometry", saveGeometry());
 		m_settings->setValue("crashed", false);
