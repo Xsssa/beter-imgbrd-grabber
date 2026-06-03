@@ -574,6 +574,8 @@ void SearchTab::finishedLoadingPreview()
 		return;
 	}
 
+	thumbnailLoaded(img);
+
 	// Download whitelist images on thumbnail view
 	Blacklist whitelistedTags;
 	for (const QString &tag : m_settings->value("whitelistedtags").toString().split(" ", Qt::SkipEmptyParts)) {
@@ -599,6 +601,11 @@ void SearchTab::finishedLoadingPreview()
 			m_downloadQueue->add(DownloadQueue::Background, downloader);
 		}
 	}
+}
+
+void SearchTab::thumbnailLoaded(const QSharedPointer<Image> &img)
+{
+	Q_UNUSED(img)
 }
 
 /**
@@ -1495,8 +1502,12 @@ void SearchTab::setFavoriteImage(const QString &name)
 
 	for (Favorite &fav : m_favorites) {
 		if (fav.getName() == name) {
-			fav.setImage(m_images.first()->previewImage());
-			m_profile->emitFavorite();
+			for (const QSharedPointer<Image> &img : qAsConst(m_images)) {
+				if (!img->previewImage().isNull() && fav.setImage(img->previewImage())) {
+					m_profile->emitFavorite();
+					return;
+				}
+			}
 			return;
 		}
 	}

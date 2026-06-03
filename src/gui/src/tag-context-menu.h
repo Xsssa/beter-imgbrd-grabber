@@ -38,7 +38,7 @@ class TagContextMenu : public QMenu
 		void copyAllTagsWithNamespacesToClipboard();
 
 	signals:
-		void setFavoriteImage();
+		void setFavoriteImage(const QString &tag);
 		void openNewTab();
 
 	private:

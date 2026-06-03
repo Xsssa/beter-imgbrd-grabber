@@ -48,7 +48,9 @@ void FavoritesDock::contextMenu(const QPoint &pos)
 		return;
 	}
 
-	const QList<Site*> sites = m_currentTab->loadSites();
+	const QList<Site*> sites = m_currentTab != nullptr
+		? m_currentTab->loadSites()
+		: QList<Site*>();
 	auto *menu = new TagContextMenu(m_hover, {}, {}, m_profile, sites, false, this);
 	connect(menu, &TagContextMenu::openNewTab, this, &FavoritesDock::emitOpenInNewTab);
 	menu->exec(QCursor::pos());
@@ -81,26 +83,29 @@ void FavoritesDock::changeSortDirection()
 
 void FavoritesDock::refresh()
 {
+	clearHover();
 	clearLayout(ui->layoutFavorites);
+
+	QList<Favorite> favorites = m_favorites;
 
 	// Sort
 	static const QStringList assoc { "name", "note", "lastviewed" };
 	const QString order = assoc[qMax(ui->comboSortBy->currentIndex(), 0)];
 	if (order == "note") {
-		std::sort(m_favorites.begin(), m_favorites.end(), Favorite::sortByNote);
+		std::sort(favorites.begin(), favorites.end(), Favorite::sortByNote);
 	} else if (order == "lastviewed") {
-		std::sort(m_favorites.begin(), m_favorites.end(), Favorite::sortByLastViewed);
+		std::sort(favorites.begin(), favorites.end(), Favorite::sortByLastViewed);
 	} else {
-		std::sort(m_favorites.begin(), m_favorites.end(), Favorite::sortByName);
+		std::sort(favorites.begin(), favorites.end(), Favorite::sortByName);
 	}
 
 	// Reverse
 	if (m_descending) {
-		m_favorites = reversed(m_favorites);
+		favorites = reversed(favorites);
 	}
 
 	int i = 0;
-	for (const Favorite &fav : qAsConst(m_favorites)) {
+	for (const Favorite &fav : qAsConst(favorites)) {
 		auto *lab = new QAffiche(QString(fav.getName()), 0, QColor(), this);
 		lab->setText(fav.getName());
 		lab->setToolTip("<img src=\"" + fav.getImagePath() + "\" /><br/>" + tr("<b>Name:</b> %1<br/><b>Note:</b> %2 %%<br/><b>Last view:</b> %3").arg(fav.getName(), QString::number(fav.getNote()), QLocale().toString(fav.getLastViewed(), QLocale::ShortFormat)));
@@ -114,6 +119,11 @@ void FavoritesDock::refresh()
 		connect(lab, SIGNAL(middleClicked(QString)), this, SIGNAL(openInNewTab(QString)));
 		connect(lab, SIGNAL(mouseOver(QString)), this, SLOT(setHover(QString)));
 		connect(lab, SIGNAL(mouseOut()), this, SLOT(clearHover()));
+		lab->setContextMenuPolicy(Qt::CustomContextMenu);
+		connect(lab, &QWidget::customContextMenuRequested, this, [this, tag = fav.getName()](const QPoint &pos) {
+			setHover(tag);
+			contextMenu(pos);
+		});
 
 		ui->layoutFavorites->addWidget(lab);
 	}

@@ -57,6 +57,10 @@ QList<Site*> Favorite::getSites() const
 
 bool Favorite::setImage(const QPixmap &img)
 {
+	if (img.isNull()) {
+		return false;
+	}
+
 	if (!QDir(savePath("thumbs")).exists()) {
 		QDir(savePath()).mkdir("thumbs");
 	}

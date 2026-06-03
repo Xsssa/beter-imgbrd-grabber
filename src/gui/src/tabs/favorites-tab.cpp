@@ -1,8 +1,13 @@
 #include "tabs/favorites-tab.h"
 #include <QMenu>
 #include <QMessageBox>
+#include <QNetworkRequest>
+#include <QPainter>
+#include <QPainterPath>
+#include <QFile>
 #include <QSettings>
 #include <QShortcut>
+#include <QUrl>
 #include <QtMath>
 #include <ui_favorites-tab.h>
 #include <algorithm>
@@ -16,12 +21,52 @@
 #include "models/page.h"
 #include "models/profile.h"
 #include "models/site.h"
+#include "network/network-reply.h"
 #include "ui/fixed-size-grid-layout.h"
 #include "ui/QAffiche.h"
 #include "ui/QBouton.h"
 #include "ui/text-edit.h"
 
 #define FAVORITES_THUMB_SIZE 150
+#define FAVORITES_THUMB_REPAIR_CONCURRENT_LIMIT 2
+#define FAVORITES_THUMB_REPAIR_MAX_ATTEMPTS 8
+
+namespace
+{
+	QPixmap favoritePlaceholder(const QString &name, int size)
+	{
+		QPixmap pix(size, size);
+		pix.fill(Qt::transparent);
+
+		QPainter painter(&pix);
+		painter.setRenderHint(QPainter::Antialiasing);
+
+		const QRectF rect = pix.rect().adjusted(4, 4, -4, -4);
+		QPainterPath path;
+		path.addRoundedRect(rect, 12, 12);
+
+		painter.fillPath(path, QColor(10, 24, 32));
+		painter.setPen(QPen(QColor(45, 224, 208, 170), 2));
+		painter.drawPath(path);
+
+		QString marker = QStringLiteral("?");
+		for (const QChar &ch : name) {
+			if (ch.isLetterOrNumber()) {
+				marker = QString(ch).toUpper();
+				break;
+			}
+		}
+
+		QFont font = painter.font();
+		font.setBold(true);
+		font.setPointSize(qMax(18, size / 3));
+		painter.setFont(font);
+		painter.setPen(QColor(210, 244, 240));
+		painter.drawText(pix.rect(), Qt::AlignCenter, marker);
+
+		return pix;
+	}
+}
 
 
 FavoritesTab::FavoritesTab(Profile *profile, DownloadQueue *downloadQueue, MainWindow *parent)
@@ -119,15 +164,17 @@ void FavoritesTab::updateFavorites()
 	const QString &order = assoc[ui->comboOrder->currentIndex()];
 	const bool reverse = ui->comboAsc->currentIndex() == 1;
 
+	QList<Favorite> favorites = m_favorites;
+
 	if (order == "note") {
-		std::sort(m_favorites.begin(), m_favorites.end(), Favorite::sortByNote);
+		std::sort(favorites.begin(), favorites.end(), Favorite::sortByNote);
 	} else if (order == "lastviewed") {
-		std::sort(m_favorites.begin(), m_favorites.end(), Favorite::sortByLastViewed);
+		std::sort(favorites.begin(), favorites.end(), Favorite::sortByLastViewed);
 	} else {
-		std::sort(m_favorites.begin(), m_favorites.end(), Favorite::sortByName);
+		std::sort(favorites.begin(), favorites.end(), Favorite::sortByName);
 	}
 	if (reverse) {
-		m_favorites = reversed(m_favorites);
+		favorites = reversed(favorites);
 	}
 
 	clearLayout(m_favoritesLayout);
@@ -145,7 +192,7 @@ void FavoritesTab::updateFavorites()
 	const int imageSize = qFloor(FAVORITES_THUMB_SIZE * upscale);
 	const int dim = imageSize + borderSize * 2;
 
-	for (Favorite &fav : m_favorites) {
+	for (Favorite &fav : favorites) {
 		const QString xt = tr("<b>Name:</b> %1<br/><b>Note:</b> %2 %<br/><b>Last view:</b> %3").arg(fav.getName(), QString::number(fav.getNote()), QLocale().toString(fav.getLastViewed(), QLocale::ShortFormat));
 		auto *w = new QWidget(ui->scrollAreaWidgetContents);
 		auto *l = new QVBoxLayout;
@@ -165,6 +212,13 @@ void FavoritesTab::updateFavorites()
 			const bool resizeInsteadOfCropping = m_settings->value("resizeInsteadOfCropping", true).toBool();
 
 			QPixmap img = fav.getImage();
+			if (img.isNull()) {
+				img = favoritePlaceholder(fav.getName(), imageSize);
+			}
+			if (!hasSavedThumbnail(fav)) {
+				scheduleFavoriteThumbnailRepair(fav);
+			}
+
 			auto *image = new QBouton(fav.getName(), resizeInsteadOfCropping, false, 0, QColor(), this);
 				image->scale(img, QSize(imageSize, imageSize));
 				image->setFixedSize(dim, dim);
@@ -205,6 +259,168 @@ void FavoritesTab::updateFavorites()
 		}
 
 		m_favoritesLayout->addWidget(w);
+	}
+}
+
+bool FavoritesTab::hasSavedThumbnail(const Favorite &favorite) const
+{
+	const QString path = favorite.getImagePath();
+	return !path.isEmpty()
+		&& !path.startsWith(QStringLiteral(":/"))
+		&& QFile::exists(path)
+		&& !favorite.getImage().isNull();
+}
+
+void FavoritesTab::scheduleFavoriteThumbnailRepair(const Favorite &favorite)
+{
+	const QString tag = favorite.getName();
+	if (tag.isEmpty() || m_thumbnailRepairAttempted.contains(tag)) {
+		return;
+	}
+	if (m_thumbnailRepairAttempted.size() >= FAVORITES_THUMB_REPAIR_MAX_ATTEMPTS) {
+		return;
+	}
+
+	const int activeRepairs = m_thumbnailRepairPages.size() + m_thumbnailRepairReplies.size();
+	if (activeRepairs >= FAVORITES_THUMB_REPAIR_CONCURRENT_LIMIT) {
+		return;
+	}
+
+	QList<Site*> sites = favorite.getSites();
+	if (sites.isEmpty()) {
+		sites = m_selectedSources;
+	}
+	if (sites.isEmpty()) {
+		return;
+	}
+
+	m_thumbnailRepairAttempted.insert(tag);
+
+	Site *site = sites.first();
+	QStringList search = tag.trimmed().split(' ', Qt::SkipEmptyParts);
+	search.append(m_settings->value("add").toString().trimmed().split(' ', Qt::SkipEmptyParts));
+	auto *page = new Page(m_profile, site, m_sites.values(), SearchQuery(search), 1, 1, favorite.getPostFiltering(), false, this);
+	m_thumbnailRepairPages.insert(page, tag);
+	connect(page, &Page::finishedLoading, this, &FavoritesTab::repairFavoriteThumbnailPageLoaded);
+	connect(page, &Page::failedLoading, this, [this, page]() {
+		const QString tag = m_thumbnailRepairPages.take(page);
+		finishFavoriteThumbnailRepair(tag);
+		page->deleteLater();
+	});
+	if (!page->isValid()) {
+		const QString tag = m_thumbnailRepairPages.take(page);
+		finishFavoriteThumbnailRepair(tag);
+		page->deleteLater();
+		return;
+	}
+	page->load(true);
+}
+
+void FavoritesTab::repairFavoriteThumbnailPageLoaded(Page *page)
+{
+	const QString tag = m_thumbnailRepairPages.take(page);
+	if (tag.isEmpty()) {
+		page->deleteLater();
+		return;
+	}
+
+	if (page->images().isEmpty()) {
+		finishFavoriteThumbnailRepair(tag);
+		page->deleteLater();
+		return;
+	}
+
+	QSharedPointer<Image> image;
+	for (const QSharedPointer<Image> &img : page->images()) {
+		if (img->isValid()) {
+			image = img;
+			break;
+		}
+	}
+	if (image.isNull()) {
+		finishFavoriteThumbnailRepair(tag);
+		page->deleteLater();
+		return;
+	}
+
+	const qreal upscale = m_settings->value("thumbnailUpscale", 1.0).toDouble();
+	const int imageSize = qFloor(FAVORITES_THUMB_SIZE * upscale);
+	const QUrl thumbnailUrl = m_settings->value("thumbnailSmartSize", true).toBool()
+		? image->mediaForSize(QSize(imageSize, imageSize), true).url
+		: image->url(Image::Size::Thumbnail);
+
+	if (!thumbnailUrl.isValid()) {
+		finishFavoriteThumbnailRepair(tag);
+		page->deleteLater();
+		return;
+	}
+
+	Site *site = image->parentSite();
+	NetworkReply *reply = site->get(site->fixUrl(thumbnailUrl.toString()), Site::QueryType::Thumbnail, image->parentUrl(), "favorite-preview");
+	m_thumbnailRepairReplies.insert(reply, tag);
+	m_thumbnailRepairReplySites.insert(reply, site);
+	connect(reply, &NetworkReply::finished, this, &FavoritesTab::repairFavoriteThumbnailReplyFinished);
+	page->deleteLater();
+}
+
+void FavoritesTab::repairFavoriteThumbnailReplyFinished()
+{
+	auto *reply = qobject_cast<NetworkReply*>(sender());
+	if (reply == nullptr) {
+		return;
+	}
+
+	const QString tag = m_thumbnailRepairReplies.take(reply);
+	Site *site = m_thumbnailRepairReplySites.take(reply);
+	if (tag.isEmpty()) {
+		reply->deleteLater();
+		return;
+	}
+
+	const QUrl redirection = reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
+	if (!redirection.isEmpty() && site != nullptr) {
+		NetworkReply *retry = site->get(site->fixUrl(redirection.toString()), Site::QueryType::Thumbnail, {}, "favorite-preview");
+		m_thumbnailRepairReplies.insert(retry, tag);
+		m_thumbnailRepairReplySites.insert(retry, site);
+		connect(retry, &NetworkReply::finished, this, &FavoritesTab::repairFavoriteThumbnailReplyFinished);
+		reply->deleteLater();
+		return;
+	}
+
+	QPixmap thumbnail;
+	if (reply->error() == NetworkReply::NetworkError::NoError) {
+		thumbnail.loadFromData(reply->readAll());
+	} else if (site != nullptr) {
+		const QString ext = getExtension(reply->url());
+		if (!ext.isEmpty() && ext != "jpg") {
+			NetworkReply *retry = site->get(site->fixUrl(setExtension(reply->url(), "jpg").toString()), Site::QueryType::Thumbnail, {}, "favorite-preview");
+			m_thumbnailRepairReplies.insert(retry, tag);
+			m_thumbnailRepairReplySites.insert(retry, site);
+			connect(retry, &NetworkReply::finished, this, &FavoritesTab::repairFavoriteThumbnailReplyFinished);
+			reply->deleteLater();
+			return;
+		}
+	}
+	reply->deleteLater();
+
+	if (thumbnail.isNull()) {
+		finishFavoriteThumbnailRepair(tag);
+		return;
+	}
+
+	const int index = m_favorites.indexOf(Favorite(tag));
+	if (index >= 0 && m_favorites[index].setImage(thumbnail)) {
+		m_profile->emitFavorite();
+	} else {
+		finishFavoriteThumbnailRepair(tag);
+	}
+}
+
+void FavoritesTab::finishFavoriteThumbnailRepair(const QString &tag)
+{
+	Q_UNUSED(tag)
+	if (m_thumbnailRepairPages.size() + m_thumbnailRepairReplies.size() < FAVORITES_THUMB_REPAIR_CONCURRENT_LIMIT) {
+		updateFavorites();
 	}
 }
 
@@ -456,6 +672,23 @@ void FavoritesTab::thumbnailContextMenu(QMenu *menu, const QSharedPointer<Image>
 	menu->insertAction(first, actionUseAsThumbnail);
 
 	menu->insertSeparator(first);
+}
+
+void FavoritesTab::thumbnailLoaded(const QSharedPointer<Image> &img)
+{
+	if (m_currentTags.isEmpty() || img->previewImage().isNull()) {
+		return;
+	}
+
+	const int index = m_favorites.indexOf(Favorite(m_currentTags));
+	if (index < 0 || hasSavedThumbnail(m_favorites[index])) {
+		return;
+	}
+
+	if (m_favorites[index].setImage(img->previewImage())) {
+		log(QStringLiteral("Repaired favorite thumbnail for \"%1\" from loaded results.").arg(m_currentTags), Logger::Info);
+		m_profile->emitFavorite();
+	}
 }
 
 void FavoritesTab::updateTitle()

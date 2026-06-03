@@ -1076,3 +1076,56 @@ QMenu::separator {
     background-color: #172638;
     border-color: #45e0d0;
 }
+
+/* Compact Firefox-like workspace tabs */
+#mainTabs::pane {
+    background-color: #070b10;
+    border: 1px solid #1d2a3a;
+    border-top-color: #263548;
+    border-radius: 0;
+    padding: 0;
+    top: -1px;
+}
+
+#mainTabs QTabBar {
+    qproperty-drawBase: 0;
+    background-color: transparent;
+}
+
+#mainTabs QTabBar::tab {
+    color: #91a6bd;
+    background-color: #0b1119;
+    border: 1px solid #1d2a3a;
+    border-bottom: 0;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+    min-height: 24px;
+    min-width: 0;
+    padding: 5px 12px;
+    margin-right: 2px;
+}
+
+#mainTabs QTabBar::tab:hover:!selected {
+    color: #dce8f5;
+    background-color: #111923;
+    border-color: #2a3c52;
+}
+
+#mainTabs QTabBar::tab:selected {
+    color: #f8fbff;
+    background-color: #111923;
+    border-color: #45e0d0 #2a3c52 #111923 #2a3c52;
+    font-weight: 700;
+}
+
+#mainTabs QTabBar::close-button {
+    background-color: transparent;
+    border-radius: 4px;
+    width: 9px;
+    height: 9px;
+    margin: 3px;
+}
+
+#mainTabs QTabBar::close-button:hover {
+    background-color: #ff5577;
+}

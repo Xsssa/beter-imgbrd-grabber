@@ -3,6 +3,8 @@
 
 #include "tabs/search-tab.h"
 #include <QDateTime>
+#include <QMap>
+#include <QSet>
 
 
 namespace Ui
@@ -12,6 +14,7 @@ namespace Ui
 
 
 class MainWindow;
+class NetworkReply;
 class Page;
 class QMenu;
 
@@ -30,6 +33,7 @@ class FavoritesTab : public SearchTab
 	protected:
 		void changeEvent(QEvent *event) override;
 		void thumbnailContextMenu(QMenu *menu, const QSharedPointer<Image> &img) override;
+		void thumbnailLoaded(const QSharedPointer<Image> &img) override;
 
 	public slots:
 		// Zooms
@@ -56,13 +60,23 @@ class FavoritesTab : public SearchTab
 		void setPageLabelText(QLabel *txt, Page *page, const QList<QSharedPointer<Image>> &imgs, int filteredImages, const QString &noResultsMessage = nullptr) override;
 		void updateTitle() override;
 		void splitterMoved(int pos, int index);
+		void repairFavoriteThumbnailPageLoaded(Page *page);
+		void repairFavoriteThumbnailReplyFinished();
 
 	private:
+		bool hasSavedThumbnail(const Favorite &favorite) const;
+		void scheduleFavoriteThumbnailRepair(const Favorite &favorite);
+		void finishFavoriteThumbnailRepair(const QString &tag);
+
 		QDateTime m_loadFavorite;
 		QString m_currentTags;
 		int m_currentFav;
 		QMap<QString, QVariantMap> m_lastImages, m_newLastImages;
 		FixedSizeGridLayout *m_favoritesLayout;
+		QSet<QString> m_thumbnailRepairAttempted;
+		QMap<Page*, QString> m_thumbnailRepairPages;
+		QMap<NetworkReply*, QString> m_thumbnailRepairReplies;
+		QMap<NetworkReply*, Site*> m_thumbnailRepairReplySites;
 };
 
 #endif // FAVORITES_TAB_H

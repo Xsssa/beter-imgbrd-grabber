@@ -598,14 +598,27 @@ void ViewerWindow::openInNewTab()
 		m_parent->activateWindow();
 	}
 }
-void ViewerWindow::setfavorite()
+void ViewerWindow::setfavorite(const QString &tag)
 {
-	Favorite fav(m_link);
+	if (tag.isEmpty()) {
+		return;
+	}
+
+	const QPixmap img = m_loadedImage && !m_displayImage.isNull()
+		? m_displayImage
+		: m_image->previewImage();
+
+	Favorite fav(tag);
 	const int pos = m_favorites.indexOf(fav);
 	if (pos >= 0) {
-		m_favorites[pos].setImage(m_loadedImage ? m_displayImage : m_image->previewImage());
+		if (!img.isNull()) {
+			m_favorites[pos].setImage(img);
+		}
 	} else {
-		fav.setImage(m_loadedImage ? m_displayImage : m_image->previewImage());
+		fav.setSites({ m_site });
+		if (!img.isNull()) {
+			fav.setImage(img);
+		}
 		m_favorites.append(fav);
 	}
 
@@ -614,6 +627,8 @@ void ViewerWindow::setfavorite()
 
 void ViewerWindow::load(bool force)
 {
+	m_link.clear();
+
 	const Image::Size size = m_image->preferredDisplaySize();
 	log(QStringLiteral("Loading image from `%1`").arg(m_image->url(size).toString()));
 
